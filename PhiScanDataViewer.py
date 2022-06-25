@@ -6,20 +6,23 @@ from PyQt5 import uic
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
-from pyqtgraph import PlotWidget, graphicsItems, TextItem
+from pyqtgraph import PlotWidget, graphicsItems, TextItem, mkPen
 from pyqtgraph.graphicsItems.PlotDataItem import PlotDataItem, PlotCurveItem
+from matplotlib import cm
+
 
 from PhiScanDataModel import *
 
 
 class PolDataViewerWindow(QMainWindow):
 
-    toggleVis = pyqtSignal()
+    toggleVis = pyqtSignal(dict)
     
     def __init__(self, configFile):
         super().__init__()
-        self.initUI()
         self.analyser = Analyser()
+        self.initUI()
+        
         self.phi = None
         self.config_file = configFile
                     
@@ -33,7 +36,7 @@ class PolDataViewerWindow(QMainWindow):
                         quit_msg, QMessageBox.Yes, QMessageBox.No)
 
         if reply == QMessageBox.Yes:
-            
+        
             self.visTimer.stop()
         
         else:
@@ -60,6 +63,9 @@ class PolDataViewerWindow(QMainWindow):
                 self.analyser.files.append(f)
                 print("Dataset added")
                 self.updateTable()
+        visDict = {'show': list(self.analyser.dfDict.keys())}    
+        self.toggleVis.emit(visDict)
+        print("Loading", visDict)
 
 
     def updateTable(self):
@@ -85,7 +91,7 @@ class PolDataViewerWindow(QMainWindow):
                     if col % 4 == 0:
                         item = QTableWidgetItem(f"{list(self.analyser.dfDict.keys())[row]}".format(row,col))
                         item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
-                        item.setCheckState(Qt.CheckState.Unchecked)
+                        item.setCheckState(Qt.CheckState.Checked)
                         self.tableWidget.setItem(row,col,item)
                     if col == 1:
                         # print("F1" not in list(self.analyser.dfDict.keys())[row])
@@ -94,7 +100,7 @@ class PolDataViewerWindow(QMainWindow):
                         else:
                             item = QTableWidgetItem("Reference".format(row,col))
                         self.tableWidget.setItem(row,col,item)
-            self.updatePlot()
+            # self.updatePlot()
 
         except Exception as e:
             print("invalid data format")
@@ -113,15 +119,20 @@ class PolDataViewerWindow(QMainWindow):
         self.livePlot.showGrid(x = True, y = True)
         self.labelValue = TextItem('', **{'color': '#FFF'})
         self.labelValue.setPos(QPointF(4,-100))
+        self.plotLineWidth = 1.5
         self.livePlot.addItem(self.labelValue)
 
         self.comboBoxMeasurement.activated.emit(0)
+        
+        
         
         self.setAcceptDrops(True)
         self.tableWidget.width()
         self.tableWidget.setToolTip("Drag and drop .pkl PhiScan dataframes")
         tableHeader  = self.tableWidget.horizontalHeader()
         tableHeader.setSectionResizeMode(1,QHeaderView.ResizeToContents)
+        self.lEditSpeed.setAlignment(Qt.AlignCenter) 
+        self.lEditPhi.setAlignment(Qt.AlignCenter) 
 
      
     def rescalePlot(self, x1,x2,px,y1,y2,py):
@@ -148,6 +159,8 @@ class PolDataViewerWindow(QMainWindow):
         self.averagePlotLineWidth = 1.5
         self.plotDataContainer = {}       # Dictionary for plot items
 
+        self.plotVisDict = {} # dictionary for visibility status
+
         
         self.visTimer = QTimer(self)
         self.visTimer.setInterval(500)
@@ -162,31 +175,92 @@ class PolDataViewerWindow(QMainWindow):
         self.lEditPhi.editingFinished.connect(self.validateEditPhi)
         self.comboBoxMeasurement.activated.connect(self.selectMeasurement)
         self.visTimer.timeout.connect(self.checkVisibilityFlags)
+        self.toggleVis.connect(self.plotData)
         # self.tableWidget.stateChanged.connect(self.updatePlot)
 
-    
-    def updatePlot(self):
 
-        
-        key = self.comboBoxMeasurement.currentText()
-        if key != "TDS":
+
+    
+    def plotData(self, visDict):
+
+        ckey = self.comboBoxMeasurement.currentText()
+        if ckey != "TDS":
             xKey = 'freq' 
-            yKey = key
+            yKey = ckey
         else:
             xKey = 'time'
             yKey = 'amp'
         
-        self.plot(self.analyser.dfDict['F1'].loc[0][xKey],20*np.log(np.abs(self.analyser.dfDict['F1'].loc[0][yKey])))
+        palette = cm.get_cmap('rainbow', len(self.analyser.dfDict))
+        self.plotColors = palette(np.linspace(0,1,len(self.analyser.dfDict)))*255
+        self.plotColors = np.around(self.plotColors)
+        
+        for k in range(len(self.analyser.dfDict)):
+            key = list(self.analyser.dfDict.keys())[k]
+            
+            if 'show' in visDict.keys() and key in list(visDict.values())[0]:   
+                # vis = self.plotDataContainer[key]['vis']   
+                self.tableWidget.setItem(k,3,QTableWidgetItem())
+                self.tableWidget.item(k,3).setBackground(QColor(int(self.plotColors[k][0]),int(self.plotColors[k][1]),(self.plotColors[k][2])))
+                pen = mkPen(color = (self.plotColors[k]), width = self.plotLineWidth)
+                self.addCurve(key,pen)
+                if ckey == 'FFT':
+                    xData = self.analyser.dfDict[key].loc[180][xKey]
+                    yData = 20*np.log(np.abs(self.analyser.dfDict[key].loc[180][yKey]))
+                elif ckey == 'TDS':
+                   
+                    xData = self.analyser.dfDict[key].loc[180][xKey]
+                    yData = self.analyser.dfDict[key].loc[180][yKey]
+                self.setValues(key, xData, yData)          
+            elif 'hide' in visDict.keys() and key in list(visDict.values())[0] :
+             
+                self.removeCurve(key)
+          
+            
+    def addCurve(self, curve_id, pen):
+        
+        plot = self.livePlot.plot(name=curve_id, pen=pen)
+        self.plotVisDict[curve_id] = plot
+
+
+    def removeCurve(self, curve_id):
+
+        curve_id = str(curve_id)
+
+        if curve_id in list(self.plotVisDict.keys()):
+            self.livePlot.removeItem(self.plotVisDict[curve_id])
+            del self.plotVisDict[curve_id]
+            self.livePlot.clear()
+
+
+    def setValues(self, curve_id, xData, yData):
+
+        curve = self.plotVisDict[curve_id]
+        curve.setData(xData, yData)
+
+
+   
+
 
     def checkVisibilityFlags(self):
 
-        for row in range(self.tableWidget.rowCount()):
-            if self.tableWidget.item(row, 0).checkState() == Qt.Checked:
-                #print(f"Showing {self.tableWidget.item(row, 0).text()} data")
-                pass
-            if self.tableWidget.item(row, 0).checkState() == Qt.Unchecked:
-                pass
-                #print(f"{self.tableWidget.item(row, 0).text()} data hidden")
+
+        try:
+            for row in range(self.tableWidget.rowCount()):
+                
+                if self.tableWidget.item(row, 0).checkState() == Qt.Checked:
+                    visData = {'show': self.tableWidget.item(row, 0).text()}
+                if self.tableWidget.item(row, 0).checkState() == Qt.Unchecked:
+                    visData = {'hide': self.tableWidget.item(row, 0).text()}
+                    
+                self.toggleVis.emit(visData)
+                
+                
+
+            
+        except Exception as e:
+            raise e
+            
 
 
     def selectMeasurement(self):
@@ -195,7 +269,7 @@ class PolDataViewerWindow(QMainWindow):
 
         if self.comboBoxMeasurement.currentIndex() == 0:
             print("FFT")
-            self.rescalePlot(0,3.5,0,-250,-105,0)
+            self.rescalePlot(0.53,1.25,0,-170,-90,0)
             self.livePlot.setLabel('left', 'Transmission Intensity (dB)')
             self.livePlot.setLabel('bottom', 'Frequency (THz)')
             self.livePlot.setTitle("""Transmission FFT""", color = 'g', size = "45 pt")   
@@ -208,10 +282,15 @@ class PolDataViewerWindow(QMainWindow):
             self.livePlot.setTitle("""Transmission Ratio""", color = 'r', size = "45 pt")   
         elif self.comboBoxMeasurement.currentIndex() == 2:
             print("TDS")    
-            self.rescalePlot(0,35,0,-2,2,0)        
+            self.rescalePlot(10,50,0,-1.65,1.25,0)        
             self.livePlot.setLabel('left', 'Signal (mV)')
             self.livePlot.setLabel('bottom', 'Time (ps)')
-            self.livePlot.setTitle("""THz - TDS""", color = 'y', size = "45 pt")   
+            self.livePlot.setTitle("""THz - TDS""", color = 'y', size = "45 pt") 
+
+        visDict = {'show': list(self.analyser.dfDict.keys())}    
+        self.toggleVis.emit(visDict)
+  
+        
   
 
     def validateEditPhi(self):
@@ -233,7 +312,7 @@ class PolDataViewerWindow(QMainWindow):
             self.lEditPhi.setText(str(self.phi))
 
 
-    def plot(self, x, y):
+    def plot(self, x, y, name):
 
         """
             Plot data on existing plot widget.
@@ -245,7 +324,8 @@ class PolDataViewerWindow(QMainWindow):
             :rtype: PlotWidget.plot  
         """   
 
-        return self.livePlot.plot(x,y)
+        self.plotDataContainer[name] = self.livePlot.plot(x,y)
+        print(self.plotDataContainer[name])
 
     
     def mouseMoved(self, evt):

@@ -25,7 +25,7 @@ class PolDataViewerWindow(QMainWindow):
         
         self.phi = None
         self.config_file = configFile
-                    
+        self.phi_idx = 0        
 
     def closeEvent(self, event):
 
@@ -38,6 +38,7 @@ class PolDataViewerWindow(QMainWindow):
         if reply == QMessageBox.Yes:
         
             self.visTimer.stop()
+            self.animationTimer.stop()
         
         else:
             event.ignore()    
@@ -62,10 +63,10 @@ class PolDataViewerWindow(QMainWindow):
             if f not in self.analyser.files and f.endswith(".pkl"):
                 self.analyser.files.append(f)
                 print("Dataset added")
-                self.updateTable()
-        visDict = {'show': list(self.analyser.dfDict.keys())}    
-        self.toggleVis.emit(visDict)
-        print("Loading", visDict)
+        self.updateTable()
+        # visDict = {'show': list(self.analyser.dfDict.keys())}    
+        
+        
 
 
     def updateTable(self):
@@ -73,20 +74,37 @@ class PolDataViewerWindow(QMainWindow):
         """Update table"""
 
         try:
-            
+            # Load data
             for i in range(len(self.analyser.files)):
                 f = self.analyser.files[i]
                 key = f.split('/')[-1].split(".pkl")[0].split("_")[0]
                 
                 self.lblStatus.setText("Status: Processing")
                 self.analyser.dfDict[key] = pd.read_pickle(f)
+                self.tableWidget.insertRow(self.tableWidget.rowCount())
+                print("Row added", self.tableWidget.rowCount())
                 if key in ['Reference', 'ref', 'F1', 'F1_reference', 'F1_Reference', 'F1Ref', 'F1ref']:
                     #always select the last loaded reference as the global reference for future calculations
                     self.analyser.referenceDF = self.analyser.dfDict[key]
                     
-                self.tableWidget.insertRow(i+ self.tableWidget.rowCount())
+                
+                
                 self.lblStatus.setText("Status: Ready")
-            for row in range(self.tableWidget.rowCount()):
+                print("Data added")
+            # Prepare plot colors
+            palette = cm.get_cmap('rainbow', len(self.analyser.dfDict))
+            self.plotColors = palette(np.linspace(0,1,len(self.analyser.dfDict)))*255
+            self.plotColors = np.around(self.plotColors)
+            print("Colors ready")
+            print("ROW COUNT",self.tableWidget.rowCount())
+            # Update table
+            for row in range(len(self.analyser.files)):
+                print("Coloring rows")
+                # rowCount =  self.tableWidget.rowCount()
+                # self.tableWidget.insertRow(rowCount)
+                self.tableWidget.setItem(row,3,QTableWidgetItem())
+                self.tableWidget.item(row,3).setBackground(QColor(int(self.plotColors[row][0]),int(self.plotColors[row][1]),int(self.plotColors[row][2])))
+                
                 for col in range(self.tableWidget.columnCount()):
                     if col % 4 == 0:
                         item = QTableWidgetItem(f"{list(self.analyser.dfDict.keys())[row]}".format(row,col))
@@ -100,7 +118,9 @@ class PolDataViewerWindow(QMainWindow):
                         else:
                             item = QTableWidgetItem("Reference".format(row,col))
                         self.tableWidget.setItem(row,col,item)
-            # self.updatePlot()
+            
+            print("PLOTTING DATA ##################")
+            self.plotData()
 
         except Exception as e:
             print("invalid data format")
@@ -123,9 +143,7 @@ class PolDataViewerWindow(QMainWindow):
         self.livePlot.addItem(self.labelValue)
 
         self.comboBoxMeasurement.activated.emit(0)
-        
-        
-        
+    
         self.setAcceptDrops(True)
         self.tableWidget.width()
         self.tableWidget.setToolTip("Drag and drop .pkl PhiScan dataframes")
@@ -161,10 +179,16 @@ class PolDataViewerWindow(QMainWindow):
 
         self.plotVisDict = {} # dictionary for visibility status
 
-        
         self.visTimer = QTimer(self)
-        self.visTimer.setInterval(500)
+        self.visTimer.setInterval(20)
         self.visTimer.start()
+
+        self.animationTimer = QTimer(self)
+        self.animationTimer.setInterval(25)
+        self.animationTimer.start()
+
+        self.currentState, self.previousState = [{} for i in range(2)]
+
 
 
     def connectEvents(self):
@@ -175,62 +199,84 @@ class PolDataViewerWindow(QMainWindow):
         self.lEditPhi.editingFinished.connect(self.validateEditPhi)
         self.comboBoxMeasurement.activated.connect(self.selectMeasurement)
         self.visTimer.timeout.connect(self.checkVisibilityFlags)
-        self.toggleVis.connect(self.plotData)
-        # self.tableWidget.stateChanged.connect(self.updatePlot)
+        self.animationTimer.timeout.connect(self.refreshPlot)
+        
 
+    def refreshPlot(self):
 
+        if self.currentState:        
+            self.phi_idx += 1
+            if self.phi_idx == 359:
+                self.phi_idx = 0
+            ckey = self.comboBoxMeasurement.currentText()
+            if ckey != "TDS":
+                self.xKey = 'freq' 
+                self.yKey = ckey
+            else:
+                self.xKey = 'time'
+                self.yKey = 'amp'
+            for key in self.plotVisDict:
+                
+                if ckey == 'FFT':
+                    xData = self.analyser.dfDict[key].loc[self.phi_idx][self.xKey]
+                    yData = 20*np.log(np.abs(self.analyser.dfDict[key].loc[self.phi_idx][self.yKey]))
+                elif ckey == 'TDS':
+                    
+                    xData = self.analyser.dfDict[key].loc[self.phi_idx][self.xKey]
+                    yData = self.analyser.dfDict[key].loc[self.phi_idx][self.yKey]
+                self.setValues(key, xData, yData)
+                
 
-    
-    def plotData(self, visDict):
+    def plotData(self):
 
         ckey = self.comboBoxMeasurement.currentText()
         if ckey != "TDS":
-            xKey = 'freq' 
-            yKey = ckey
+            self.xKey = 'freq' 
+            self.yKey = ckey
         else:
-            xKey = 'time'
-            yKey = 'amp'
-        
-        palette = cm.get_cmap('rainbow', len(self.analyser.dfDict))
-        self.plotColors = palette(np.linspace(0,1,len(self.analyser.dfDict)))*255
-        self.plotColors = np.around(self.plotColors)
-        
+            self.xKey = 'time'
+            self.yKey = 'amp'
+        print("Looping through data dict")
         for k in range(len(self.analyser.dfDict)):
             key = list(self.analyser.dfDict.keys())[k]
-            
-            if 'show' in visDict.keys() and key in list(visDict.values())[0]:   
-                # vis = self.plotDataContainer[key]['vis']   
-                self.tableWidget.setItem(k,3,QTableWidgetItem())
-                self.tableWidget.item(k,3).setBackground(QColor(int(self.plotColors[k][0]),int(self.plotColors[k][1]),(self.plotColors[k][2])))
-                pen = mkPen(color = (self.plotColors[k]), width = self.plotLineWidth)
+            pen = mkPen(color = (self.plotColors[k]), width = self.plotLineWidth)
+            if ckey == 'FFT':
+                xData = self.analyser.dfDict[key].loc[self.phi_idx][self.xKey]
+                yData = 20*np.log(np.abs(self.analyser.dfDict[key].loc[self.phi_idx][self.yKey]))
+            elif ckey == 'TDS':
+                
+                xData = self.analyser.dfDict[key].loc[self.phi_idx][self.xKey]
+                yData = self.analyser.dfDict[key].loc[self.phi_idx][self.yKey]
+            print("Current key and plot item")
+            print(key, self.plotVisDict)
+            if key not in self.plotVisDict.keys():
                 self.addCurve(key,pen)
-                if ckey == 'FFT':
-                    xData = self.analyser.dfDict[key].loc[180][xKey]
-                    yData = 20*np.log(np.abs(self.analyser.dfDict[key].loc[180][yKey]))
-                elif ckey == 'TDS':
-                   
-                    xData = self.analyser.dfDict[key].loc[180][xKey]
-                    yData = self.analyser.dfDict[key].loc[180][yKey]
+                print("Curve Added")
                 self.setValues(key, xData, yData)          
-            elif 'hide' in visDict.keys() and key in list(visDict.values())[0] :
-             
-                self.removeCurve(key)
+                self.currentState[key] = True
+            self.previousState[key] = self.currentState[key]
           
             
     def addCurve(self, curve_id, pen):
         
         plot = self.livePlot.plot(name=curve_id, pen=pen)
         self.plotVisDict[curve_id] = plot
+        self.currentState[curve_id] = True
+        self.previousState[curve_id] = False
 
 
     def removeCurve(self, curve_id):
 
         curve_id = str(curve_id)
 
-        if curve_id in list(self.plotVisDict.keys()):
+        if curve_id in self.plotVisDict:
             self.livePlot.removeItem(self.plotVisDict[curve_id])
-            del self.plotVisDict[curve_id]
+            
             self.livePlot.clear()
+            self.currentState[curve_id] = False
+            self.previousState[curve_id] = True
+            self.plotVisDict.pop(curve_id, None)
+            self.livePlot.show()
 
 
     def setValues(self, curve_id, xData, yData):
@@ -239,27 +285,30 @@ class PolDataViewerWindow(QMainWindow):
         curve.setData(xData, yData)
 
 
-   
-
-
     def checkVisibilityFlags(self):
 
-
-        try:
-            for row in range(self.tableWidget.rowCount()):
-                
-                if self.tableWidget.item(row, 0).checkState() == Qt.Checked:
-                    visData = {'show': self.tableWidget.item(row, 0).text()}
-                if self.tableWidget.item(row, 0).checkState() == Qt.Unchecked:
-                    visData = {'hide': self.tableWidget.item(row, 0).text()}
+        print(self.currentState, self.previousState)
+        if self.currentState:
+            try:
+                for row in range(self.tableWidget.rowCount()):
+                    key = self.tableWidget.item(row, 0).text()
+                    pen = mkPen(color = (self.plotColors[row]), width = self.plotLineWidth)
                     
-                self.toggleVis.emit(visData)
+                    if (self.tableWidget.item(row, 0).checkState() == Qt.Checked) and key not in self.plotVisDict:
+                       
+                        
+                            self.addCurve(key,pen)
+ 
+                    if self.tableWidget.item(row, 0).checkState() == Qt.Unchecked and key in self.plotVisDict:
+                        self.currentState[key] = False
+                        if self.currentState[key] != self.previousState[key]:
+                            self.removeCurve(key)    
+                            
+                            
+                    # self.previousState[key] = self.currentState[key]
                 
-                
-
-            
-        except Exception as e:
-            raise e
+            except Exception as e:
+                raise e
             
 
 
@@ -287,8 +336,7 @@ class PolDataViewerWindow(QMainWindow):
             self.livePlot.setLabel('bottom', 'Time (ps)')
             self.livePlot.setTitle("""THz - TDS""", color = 'y', size = "45 pt") 
 
-        visDict = {'show': list(self.analyser.dfDict.keys())}    
-        self.toggleVis.emit(visDict)
+        # self.plotData()
   
         
   
@@ -310,22 +358,6 @@ class PolDataViewerWindow(QMainWindow):
             
             self.phi =0
             self.lEditPhi.setText(str(self.phi))
-
-
-    def plot(self, x, y, name):
-
-        """
-            Plot data on existing plot widget.
-            :type x: numpy array
-            :param x: frequency axis data
-            :type y: numpy array
-            :param y: Pulse FFT data.
-            :return: plot data.
-            :rtype: PlotWidget.plot  
-        """   
-
-        self.plotDataContainer[name] = self.livePlot.plot(x,y)
-        print(self.plotDataContainer[name])
 
     
     def mouseMoved(self, evt):

@@ -273,7 +273,7 @@ class PolDataViewerWindow(QMainWindow):
             self.livePlot.removeItem(self.plotVisDict[curve_id])
             
             self.livePlot.clear()
-            self.currentState[curve_id] = False
+            self.currentState[curve_id] = False5
             self.previousState[curve_id] = True
             self.plotVisDict.pop(curve_id, None)
             self.livePlot.show()
@@ -295,14 +295,12 @@ class PolDataViewerWindow(QMainWindow):
                     pen = mkPen(color = (self.plotColors[row]), width = self.plotLineWidth)
                     
                     if (self.tableWidget.item(row, 0).checkState() == Qt.Checked) and key not in self.plotVisDict:
-                       
-                        
                             self.addCurve(key,pen)
  
                     if self.tableWidget.item(row, 0).checkState() == Qt.Unchecked and key in self.plotVisDict:
-                        self.currentState[key] = False
-                        if self.currentState[key] != self.previousState[key]:
-                            self.removeCurve(key)    
+                        # self.currentState[key] = False
+                        # if self.currentState[key] != self.previousState[key]:
+                        self.removeCurve(key)    
                             
                             
                     # self.previousState[key] = self.currentState[key]

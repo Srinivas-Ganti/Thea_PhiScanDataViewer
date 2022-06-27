@@ -71,11 +71,6 @@
     </column>
     <column>
      <property name="text">
-      <string>Phi</string>
-     </property>
-    </column>
-    <column>
-     <property name="text">
       <string>Colour</string>
      </property>
     </column>
@@ -173,6 +168,13 @@
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_5">
          <item>
+          <widget class="QCheckBox" name="checkBoxWaterLines">
+           <property name="text">
+            <string>waterLines</string>
+           </property>
+          </widget>
+         </item>
+         <item>
           <widget class="QLabel" name="lblSpeed">
            <property name="text">
             <string>speed (fps):        </string>
@@ -189,7 +191,7 @@
          <item>
           <widget class="QLabel" name="lblAngle1">
            <property name="text">
-            <string>phi:        </string>
+            <string>phi (deg):        </string>
            </property>
           </widget>
          </item>

@@ -142,16 +142,6 @@
       </widget>
      </item>
      <item>
-      <widget class="QCheckBox" name="checkBoxSyncPhi">
-       <property name="text">
-        <string>sync</string>
-       </property>
-       <property name="checked">
-        <bool>true</bool>
-       </property>
-      </widget>
-     </item>
-     <item>
       <layout class="QHBoxLayout" name="horizontalLayout">
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_3">

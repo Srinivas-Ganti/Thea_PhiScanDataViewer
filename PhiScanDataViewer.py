@@ -63,7 +63,7 @@ class PolDataViewerWindow(QMainWindow):
             if f not in self.analyser.files and f.endswith(".pkl"):
                 self.analyser.files.append(f)
                 print("Dataset added")
-
+        self.lblStatus.setText("Processing")
         self.updateTable() 
         self.visTimer.start()
         self.animationTimer.start()
@@ -196,8 +196,10 @@ class PolDataViewerWindow(QMainWindow):
         self.visTimer = QTimer(self)
         self.visTimer.setInterval(20)
         self.animationTimer = QTimer(self)
-        self.animationTimer.setInterval(25)
-    
+        self.lEditSpeed.setText("25")
+        self.lEditSpeed.editingFinished.emit()
+        self.lEditPhi.setText("90")
+        self.lEditPhi.editingFinished.emit()
         self.btnPlay.setCheckable(True)
         self.currentState, self.previousState = [{} for i in range(2)]
         self.lEditPhi.setReadOnly(True)
@@ -210,6 +212,7 @@ class PolDataViewerWindow(QMainWindow):
         self.livePlot.scene().sigMouseMoved.connect(self.mouseMoved)
         self.lEditPhi.editingFinished.connect(self.validateEditPhi)
         self.comboBoxMeasurement.activated.connect(self.selectMeasurement)
+        self.lEditSpeed.editingFinished.connect(self.validateEditSpeed)
         
         self.visTimer.timeout.connect(self.checkVisibilityFlags)
         self.animationTimer.timeout.connect(self.refreshPlot)
@@ -221,9 +224,11 @@ class PolDataViewerWindow(QMainWindow):
         if self.btnPlay.isChecked():
             self.animationTimer.stop()
             self.lEditPhi.setReadOnly(False)
+            self.lblStatus.setText("Ready")
         else:
             self.animationTimer.start()
             self.lEditPhi.setReadOnly(True)
+            self.lblStatus.setText("Busy")
 
 
     def refreshPlot(self):
@@ -231,9 +236,10 @@ class PolDataViewerWindow(QMainWindow):
         lblSceneX = self.livePlot.getViewBox().state['targetRange'][0][0] + np.abs(self.livePlot.getViewBox().state['targetRange'][0][1] - self.livePlot.getViewBox().state['targetRange'][0][0])*0.80
         lblSceneY =  self.livePlot.getViewBox().state['targetRange'][1][0] + np.abs(self.livePlot.getViewBox().state['targetRange'][1][1] - self.livePlot.getViewBox().state['targetRange'][1][0])*0.95
         self.labelValue.setPos(QPointF(lblSceneX,lblSceneY))
-
+        self.lblStatus.setText("Busy")
         if self.currentState:        
             self.phi_idx += 1
+            
             if self.phi_idx == 359:
                 self.phi_idx = 0
             ckey = self.comboBoxMeasurement.currentText()
@@ -244,7 +250,7 @@ class PolDataViewerWindow(QMainWindow):
                 self.xKey = 'time'
                 self.yKey = 'amp'
             for key in self.plotVisDict:
-                
+                currentPhi = f"{self.analyser.dfDict[key].loc[self.phi_idx]['phi']:.2f}"    
                 if ckey == 'FFT':
 
                     xData = self.analyser.dfDict[key].loc[self.phi_idx][self.xKey]
@@ -256,8 +262,8 @@ class PolDataViewerWindow(QMainWindow):
                     yData = self.analyser.dfDict[key].loc[self.phi_idx][self.yKey]
 
                 self.setValues(key, xData, yData)
-                self.labelValue.setText(f"""Data: {self.phi_idx}/360\nPhi: {self.analyser.dfDict[key].loc[self.phi_idx]['phi']:.2f} deg""")
-     
+                self.labelValue.setText(f"""Data: {self.phi_idx}/360\nPhi: {currentPhi} deg""")
+                self.lEditPhi.setText(f"{currentPhi}")
                 
 
     def plotData(self):
@@ -369,7 +375,21 @@ class PolDataViewerWindow(QMainWindow):
         # self.plotData()
   
         
-  
+    def validateEditSpeed(self):
+                        
+        validationRule = QIntValidator(1,60)
+        
+        if validationRule.validate(self.lEditSpeed.text(),
+                                   60)[0] == QValidator.Acceptable:
+            print("Speed input accepted")
+            self.speed = round(1/int(self.lEditSpeed.text())*1000)
+            self.animationTimer.stop()
+            print(f"Speed = {self.speed}")
+            self.animationTimer.setInterval(self.speed)
+            self.animationTimer.start()
+        else:
+            print("Invalid speed Input")
+
 
     def validateEditPhi(self):
         

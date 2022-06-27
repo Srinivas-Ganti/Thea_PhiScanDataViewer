@@ -63,8 +63,12 @@ class PolDataViewerWindow(QMainWindow):
             if f not in self.analyser.files and f.endswith(".pkl"):
                 self.analyser.files.append(f)
                 print("Dataset added")
-        self.updateTable()
-        # visDict = {'show': list(self.analyser.dfDict.keys())}    
+
+        self.updateTable() 
+        
+        self.visTimer.start()
+    
+        self.animationTimer.start()
         
         
 
@@ -75,14 +79,19 @@ class PolDataViewerWindow(QMainWindow):
 
         try:
             # Load data
+            phi_vals = np.linspace(90,-90,360)
             for i in range(len(self.analyser.files)):
                 f = self.analyser.files[i]
                 key = f.split('/')[-1].split(".pkl")[0].split("_")[0]
                 
                 self.lblStatus.setText("Status: Processing")
                 self.analyser.dfDict[key] = pd.read_pickle(f)
-                self.tableWidget.insertRow(self.tableWidget.rowCount())
-                print("Row added", self.tableWidget.rowCount())
+                self.analyser.dfDict[key]['phi'] = phi_vals
+                self.analyser.dfDict[key] = self.analyser.convDF(self.analyser.dfDict[key])
+                
+                if len(self.analyser.files) > self.tableWidget.rowCount():
+                    self.tableWidget.insertRow(self.tableWidget.rowCount())
+                    print("Row added", self.tableWidget.rowCount())
                 if key in ['Reference', 'ref', 'F1', 'F1_reference', 'F1_Reference', 'F1Ref', 'F1ref']:
                     #always select the last loaded reference as the global reference for future calculations
                     self.analyser.referenceDF = self.analyser.dfDict[key]
@@ -92,6 +101,10 @@ class PolDataViewerWindow(QMainWindow):
                 self.lblStatus.setText("Status: Ready")
                 print("Data added")
             # Prepare plot colors
+            if self.analyser.referenceDF is not None:
+                for key in self.analyser.dfDict:
+                    self.analyser.dfDict[key] = self.analyser.get_samples(self.analyser.dfDict[key], self.analyser.referenceDF)
+
             palette = cm.get_cmap('rainbow', len(self.analyser.dfDict))
             self.plotColors = palette(np.linspace(0,1,len(self.analyser.dfDict)))*255
             self.plotColors = np.around(self.plotColors)
@@ -139,6 +152,7 @@ class PolDataViewerWindow(QMainWindow):
         self.livePlot.showGrid(x = True, y = True)
         self.labelValue = TextItem('', **{'color': '#FFF'})
         self.labelValue.setPos(QPointF(4,-100))
+        self.livePlot.addItem(self.labelValue)
         self.plotLineWidth = 1.5
         self.livePlot.addItem(self.labelValue)
 
@@ -176,17 +190,17 @@ class PolDataViewerWindow(QMainWindow):
         self.livePlotLineWidth = 1
         self.averagePlotLineWidth = 1.5
         self.plotDataContainer = {}       # Dictionary for plot items
+        
+        self.labelValue = TextItem('', **{'color': '#FFF'})
+        self.labelValue.setPos(QPointF(4,-100))
 
         self.plotVisDict = {} # dictionary for visibility status
-
         self.visTimer = QTimer(self)
         self.visTimer.setInterval(20)
-        self.visTimer.start()
-
         self.animationTimer = QTimer(self)
         self.animationTimer.setInterval(25)
-        self.animationTimer.start()
-
+    
+        self.btnPlay.setCheckable(True)
         self.currentState, self.previousState = [{} for i in range(2)]
 
 
@@ -200,9 +214,21 @@ class PolDataViewerWindow(QMainWindow):
         self.comboBoxMeasurement.activated.connect(self.selectMeasurement)
         self.visTimer.timeout.connect(self.checkVisibilityFlags)
         self.animationTimer.timeout.connect(self.refreshPlot)
+        self.btnPlay.clicked.connect(self.playScan)
         
 
+    def playScan(self):
+
+        if self.btnPlay.isChecked():
+            self.animationTimer.stop()
+        else:
+            self.animationTimer.start()
+
     def refreshPlot(self):
+
+        lblSceneX = self.livePlot.getViewBox().state['targetRange'][0][0] + np.abs(self.livePlot.getViewBox().state['targetRange'][0][1] - self.livePlot.getViewBox().state['targetRange'][0][0])*0.80
+        lblSceneY =  self.livePlot.getViewBox().state['targetRange'][1][0] + np.abs(self.livePlot.getViewBox().state['targetRange'][1][1] - self.livePlot.getViewBox().state['targetRange'][1][0])*0.95
+        self.labelValue.setPos(QPointF(lblSceneX,lblSceneY))
 
         if self.currentState:        
             self.phi_idx += 1
@@ -218,13 +244,18 @@ class PolDataViewerWindow(QMainWindow):
             for key in self.plotVisDict:
                 
                 if ckey == 'FFT':
+
                     xData = self.analyser.dfDict[key].loc[self.phi_idx][self.xKey]
                     yData = 20*np.log(np.abs(self.analyser.dfDict[key].loc[self.phi_idx][self.yKey]))
-                elif ckey == 'TDS':
+
+                elif ckey == 'TDS' or ckey == 'TR':
                     
                     xData = self.analyser.dfDict[key].loc[self.phi_idx][self.xKey]
                     yData = self.analyser.dfDict[key].loc[self.phi_idx][self.yKey]
+
                 self.setValues(key, xData, yData)
+                self.labelValue.setText(f"""Data: {self.phi_idx}/360\nPhi: {self.analyser.dfDict[key].loc[self.phi_idx]['phi']:.2f} deg""")
+     
                 
 
     def plotData(self):
@@ -243,7 +274,7 @@ class PolDataViewerWindow(QMainWindow):
             if ckey == 'FFT':
                 xData = self.analyser.dfDict[key].loc[self.phi_idx][self.xKey]
                 yData = 20*np.log(np.abs(self.analyser.dfDict[key].loc[self.phi_idx][self.yKey]))
-            elif ckey == 'TDS':
+            elif ckey == 'TDS' or ckey == 'TR':
                 
                 xData = self.analyser.dfDict[key].loc[self.phi_idx][self.xKey]
                 yData = self.analyser.dfDict[key].loc[self.phi_idx][self.yKey]
@@ -273,7 +304,7 @@ class PolDataViewerWindow(QMainWindow):
             self.livePlot.removeItem(self.plotVisDict[curve_id])
             
             self.livePlot.clear()
-            self.currentState[curve_id] = False5
+            self.currentState[curve_id] = False
             self.previousState[curve_id] = True
             self.plotVisDict.pop(curve_id, None)
             self.livePlot.show()
@@ -287,7 +318,7 @@ class PolDataViewerWindow(QMainWindow):
 
     def checkVisibilityFlags(self):
 
-        print(self.currentState, self.previousState)
+        
         if self.currentState:
             try:
                 for row in range(self.tableWidget.rowCount()):
@@ -323,7 +354,7 @@ class PolDataViewerWindow(QMainWindow):
 
         elif self.comboBoxMeasurement.currentIndex() == 1:
             print("TR")
-            self.rescalePlot(0,3.5,0,-10,10,0)
+            self.rescalePlot(0.45,1.55,0,0.35,3,0)
             self.livePlot.setLabel('left', 'Transmission Ratio')
             self.livePlot.setLabel('bottom', 'Frequency (THz)')
             self.livePlot.setTitle("""Transmission Ratio""", color = 'r', size = "45 pt")   

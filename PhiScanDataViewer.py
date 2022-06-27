@@ -65,9 +65,7 @@ class PolDataViewerWindow(QMainWindow):
                 print("Dataset added")
 
         self.updateTable() 
-        
         self.visTimer.start()
-    
         self.animationTimer.start()
         
         
@@ -202,7 +200,7 @@ class PolDataViewerWindow(QMainWindow):
     
         self.btnPlay.setCheckable(True)
         self.currentState, self.previousState = [{} for i in range(2)]
-
+        self.lEditPhi.setReadOnly(True)
 
 
     def connectEvents(self):
@@ -212,6 +210,7 @@ class PolDataViewerWindow(QMainWindow):
         self.livePlot.scene().sigMouseMoved.connect(self.mouseMoved)
         self.lEditPhi.editingFinished.connect(self.validateEditPhi)
         self.comboBoxMeasurement.activated.connect(self.selectMeasurement)
+        
         self.visTimer.timeout.connect(self.checkVisibilityFlags)
         self.animationTimer.timeout.connect(self.refreshPlot)
         self.btnPlay.clicked.connect(self.playScan)
@@ -221,8 +220,11 @@ class PolDataViewerWindow(QMainWindow):
 
         if self.btnPlay.isChecked():
             self.animationTimer.stop()
+            self.lEditPhi.setReadOnly(False)
         else:
             self.animationTimer.start()
+            self.lEditPhi.setReadOnly(True)
+
 
     def refreshPlot(self):
 
@@ -318,7 +320,6 @@ class PolDataViewerWindow(QMainWindow):
 
     def checkVisibilityFlags(self):
 
-        
         if self.currentState:
             try:
                 for row in range(self.tableWidget.rowCount()):
@@ -381,13 +382,16 @@ class PolDataViewerWindow(QMainWindow):
         if validationRule.validate(self.lEditPhi.text(),
                                    120)[0] == QValidator.Acceptable:
             print(f"Phi input ACCEPTED")
-            
+            self.phi = float(self.lEditPhi.text())
         else:
             print(f"> [WARNING]:Invalid angle.")
             
             self.phi =0
             self.lEditPhi.setText(str(self.phi))
-
+        if self.plotVisDict and self.btnPlay.isChecked():
+            key = list(self.plotVisDict.keys())[0]
+            self.phi_idx = self.analyser.ml.find_nearest(self.analyser.dfDict[key]['phi'], self.phi)[0]
+            self.refreshPlot()
     
     def mouseMoved(self, evt):
 

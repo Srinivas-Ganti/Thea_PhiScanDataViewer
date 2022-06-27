@@ -13,13 +13,15 @@ class Analyser():
     def convDF(self, df):
         
         res = pd.DataFrame()
+        df.drop(['freq', 'FFT'], axis = 1, inplace = True)
         for i in range(len(df)):
             time  = df.loc[i]['time']
             amp = df.loc[i]['amp']
 
-            res = pd.concat([res, self.ml.get_FD(time,amp)])
-        res = res.reset_index(drop = True)
-        return res
+            res = pd.concat([res, self.ml.get_FD(time,amp)], axis = 0).reset_index(drop = True)
+        
+        df = pd.concat([res, df], axis = 1) 
+        return df
 
 
     def correctPhase(self, df):
@@ -43,7 +45,7 @@ class Analyser():
             tr.append(df_m.loc[j]['FFT']/ df_r.loc[j]['FFT'])
             c_tr.append(df_m.loc[j]['c_FFT']/ df_r.loc[j]['c_FFT'])
         df_m['pd'] = p_d
-        df_m['tr'] = tr
+        df_m['TR'] = tr
         df_m['c_tr'] = c_tr
         df_m = self.ml.unwrp_phase(df_m,'pd')
         df_m = self.correctPhase(df_m)

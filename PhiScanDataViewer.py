@@ -8,7 +8,9 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from pyqtgraph import PlotWidget, graphicsItems, TextItem, mkPen
 from pyqtgraph.graphicsItems.PlotDataItem import PlotDataItem, PlotCurveItem
+import pyqtgraph as pg
 from matplotlib import cm
+
 
 
 from PhiScanDataModel import *
@@ -17,7 +19,12 @@ from PhiScanDataModel import *
 class PolDataViewerWindow(QMainWindow):
 
     toggleVis = pyqtSignal(dict)
-    
+    water_peaks = [0.558, 0.752, 0.989, 1.098, 1.155, 1.164, 1.209, 1.229,\
+               1.412, 1.604, 1.665, 1.718, 1.764, 1.798, 1.870, 1.921, \
+               2.042, 2.076, 2.167, 2.197, 2.224, 2.265, 2.347, 2.367,\
+               2.394, 2.464]
+
+
     def __init__(self, configFile):
         super().__init__()
         self.analyser = Analyser()
@@ -25,7 +32,14 @@ class PolDataViewerWindow(QMainWindow):
         
         self.phi = None
         self.config_file = configFile
-        self.phi_idx = 0        
+        self.phi_idx = 0
+
+        for i in range(len(self.water_peaks)):
+            item = pg.InfiniteLine(pos = self.water_peaks[i],
+                               pen = mkPen((100,100,0,180),
+                               width=2, style=Qt.DashLine))
+            self.waterLines.append(item)
+        
 
     def closeEvent(self, event):
 
@@ -63,7 +77,7 @@ class PolDataViewerWindow(QMainWindow):
             if f not in self.analyser.files and f.endswith(".pkl"):
                 self.analyser.files.append(f)
                 print("Dataset added")
-        self.lblStatus.setText("Processing")
+        self.lblStatus.setText("Status: Processing")
         self.updateTable() 
         self.visTimer.start()
         self.animationTimer.start()
@@ -77,6 +91,7 @@ class PolDataViewerWindow(QMainWindow):
 
         try:
             # Load data
+            self.lblStatus.setText("Status: Processing")
             phi_vals = np.linspace(90,-90,360)
             for i in range(len(self.analyser.files)):
                 f = self.analyser.files[i]
@@ -113,11 +128,11 @@ class PolDataViewerWindow(QMainWindow):
                 print("Coloring rows")
                 # rowCount =  self.tableWidget.rowCount()
                 # self.tableWidget.insertRow(rowCount)
-                self.tableWidget.setItem(row,3,QTableWidgetItem())
-                self.tableWidget.item(row,3).setBackground(QColor(int(self.plotColors[row][0]),int(self.plotColors[row][1]),int(self.plotColors[row][2])))
+                self.tableWidget.setItem(row,2,QTableWidgetItem())
+                self.tableWidget.item(row,2).setBackground(QColor(int(self.plotColors[row][0]),int(self.plotColors[row][1]),int(self.plotColors[row][2])))
                 
                 for col in range(self.tableWidget.columnCount()):
-                    if col % 4 == 0:
+                    if col % 3 == 0:
                         item = QTableWidgetItem(f"{list(self.analyser.dfDict.keys())[row]}".format(row,col))
                         item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
                         item.setCheckState(Qt.CheckState.Checked)
@@ -203,6 +218,7 @@ class PolDataViewerWindow(QMainWindow):
         self.btnPlay.setCheckable(True)
         self.currentState, self.previousState = [{} for i in range(2)]
         self.lEditPhi.setReadOnly(True)
+        self.waterLines = []
 
 
     def connectEvents(self):
@@ -213,22 +229,35 @@ class PolDataViewerWindow(QMainWindow):
         self.lEditPhi.editingFinished.connect(self.validateEditPhi)
         self.comboBoxMeasurement.activated.connect(self.selectMeasurement)
         self.lEditSpeed.editingFinished.connect(self.validateEditSpeed)
-        
+        self.checkBoxWaterLines.toggled.connect(self.toggleWaterLines)
         self.visTimer.timeout.connect(self.checkVisibilityFlags)
         self.animationTimer.timeout.connect(self.refreshPlot)
         self.btnPlay.clicked.connect(self.playScan)
         
+
+    def toggleWaterLines(self):
+        waterLinesCopy = self.waterLines
+            
+        for i,waterline in enumerate(waterLinesCopy):
+            
+            if self.checkBoxWaterLines.isChecked():
+                print("WaterLines ON")
+                self.livePlot.addItem(waterLinesCopy[i])
+            else:
+                print("WaterLines OFF")
+                self.livePlot.removeItem(waterLinesCopy[i])
+
 
     def playScan(self):
 
         if self.btnPlay.isChecked():
             self.animationTimer.stop()
             self.lEditPhi.setReadOnly(False)
-            self.lblStatus.setText("Ready")
+            self.lblStatus.setText("Status: Ready")
         else:
             self.animationTimer.start()
             self.lEditPhi.setReadOnly(True)
-            self.lblStatus.setText("Busy")
+            self.lblStatus.setText("Status: Busy")
 
 
     def refreshPlot(self):
@@ -236,7 +265,7 @@ class PolDataViewerWindow(QMainWindow):
         lblSceneX = self.livePlot.getViewBox().state['targetRange'][0][0] + np.abs(self.livePlot.getViewBox().state['targetRange'][0][1] - self.livePlot.getViewBox().state['targetRange'][0][0])*0.80
         lblSceneY =  self.livePlot.getViewBox().state['targetRange'][1][0] + np.abs(self.livePlot.getViewBox().state['targetRange'][1][1] - self.livePlot.getViewBox().state['targetRange'][1][0])*0.95
         self.labelValue.setPos(QPointF(lblSceneX,lblSceneY))
-        self.lblStatus.setText("Busy")
+        self.lblStatus.setText("Status: Busy")
         if self.currentState:        
             self.phi_idx += 1
             

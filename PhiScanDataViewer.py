@@ -106,7 +106,8 @@ class PolDataViewerWindow(QMainWindow):
                 if len(self.analyser.files) > self.tableWidget.rowCount():
                     self.tableWidget.insertRow(self.tableWidget.rowCount())
                     print("Row added", self.tableWidget.rowCount())
-                if key in ['Reference', 'ref', 'F1', 'F1_reference', 'F1_Reference', 'F1Ref', 'F1ref']:
+                #if key in ['Reference', 'ref', 'F1', 'F1_reference', 'F1_Reference', 'F1Ref', 'F1ref']:
+                if ("Ref" in key) or ("ref" in key):
                     #always select the last loaded reference as the global reference for future calculations
                     self.analyser.referenceDF = self.analyser.dfDict[key]
               
@@ -136,7 +137,7 @@ class PolDataViewerWindow(QMainWindow):
                         self.tableWidget.setItem(row,col,item)
                     if col == 1:
                         # print("F1" not in list(self.analyser.dfDict.keys())[row])
-                        if (('F1' not in list(self.analyser.dfDict.keys())[row])&('Reference' not in list(self.analyser.dfDict.keys())[row])&('reference' not in list(self.analyser.dfDict.keys())[row])):
+                        if (('Ref' not in list(self.analyser.dfDict.keys())[row])&('ref' not in list(self.analyser.dfDict.keys())[row])&('reference' not in list(self.analyser.dfDict.keys())[row])):
                             item = QTableWidgetItem("Sample".format(row,col))
                         else:
                             item = QTableWidgetItem("Reference".format(row,col))
@@ -296,7 +297,7 @@ class PolDataViewerWindow(QMainWindow):
                     xData = self.analyser.dfDict[key].loc[self.phi_idx][self.xKey]
                     yData = self.analyser.dfDict[key].loc[self.phi_idx][self.yKey]
 
-                elif ckey == 'TR' and self.analyser.referenceDF:
+                elif ckey == 'TR' and self.analyser.referenceDF is not None:
                     
                     xData = self.analyser.dfDict[key].loc[self.phi_idx][self.xKey]
                     yData = self.analyser.dfDict[key].loc[self.phi_idx][self.yKey]

@@ -5,6 +5,7 @@ import numpy as np
 import datetime
 from scipy import signal as sgnl
 from sklearn.linear_model import LinearRegression
+import os
 
 class MenloLoader:
 
@@ -13,8 +14,9 @@ class MenloLoader:
         self.src_flist = src_flist
         self.win = 400
         self.config = config
+        #self.src_flist, self.src_TDS, self.dtlist = self.File_Loader_Menlo(self.src_flist)
         self.src_TDS, self.dtlist = self.FileLoader(self.src_flist)
-        self.data = self.get_data(self.src_flist, self.src_TDS, self.dtlist)
+        self.data = self.get_data2(self.src_flist, self.src_TDS, self.dtlist)
         FD = pd.DataFrame()
         for i in range(len(self.data)):
             FD = pd.concat([FD,self.get_FD(self.data.loc[i]['time'],
@@ -118,6 +120,32 @@ class MenloLoader:
         c_FFT = pd.DataFrame(c_FFT)
         return c_FFT
             
+    def getDatetime2(self, filesrclist, dtlist):   
+        """
+        Loops through list of files, fetches the DateTime indices for the
+        measurement and stores it in a list.
+
+        *Arguments*
+
+        filesrclist : list containing strings containing file paths.
+        dtlist : Destination list to store DateTime values for files referenced 
+                in filesrclist.
+
+        *Returns*
+
+        dtlist : list containing the retrieved DateTime values from the files 
+                referenced in filesrclist.
+        """  
+        for j in range(len(filesrclist)):
+            with open(filesrclist[j]) as dtr: 
+                for com in dtr:
+                    if com.startswith('#') and "Timestamp" in com:
+                        dtlist.append(datetime.datetime.\
+                                        strptime(com.split('Timestamp')[1]\
+                                                .split('\n')[0][2:],
+                                                "%Y-%m-%dT%H:%M:%S"))                 
+        return dtlist
+
 
     def get_data(self, src_flist, src_TDS, dtlist):
 
@@ -133,6 +161,19 @@ class MenloLoader:
         data = pd.DataFrame(src_TDS)
         return data
 
+    def get_data2(self, src_flist, src_TDS, dtlist):
+
+        for i in range(len(src_flist)):
+            name = src_flist[i].split("\\")[-1].split(".")[0]
+            chip = name.split("_")[0]
+            angle = name.split("_")[1]
+
+            src_TDS[i]['design'] = chip[:-2]
+            src_TDS[i]['sensor_id'] = chip[-1:]
+            src_TDS[i]['angle'] = angle
+            src_TDS[i]['Datetime'] = dtlist[i]
+        data = pd.DataFrame(src_TDS)
+        return data
 
     def FileLoader(self, src_flist):
 
@@ -142,6 +183,26 @@ class MenloLoader:
         src_TDS = self.getTDS(src_flist, src_TDS)
         dtlist = self.getDatetime(src_flist, dtlist)
         return src_TDS, dtlist    
+
+            
+    def File_Loader_Menlo(self, local_path, win = 400, norm_freq = 0):
+
+        src_flist = []
+        src_TDS = []
+        dtlist = []
+        path = local_path
+
+        #Look for TDS files and save paths to arrays
+
+        for i, (dirpath, dirnames, filenames) in enumerate(os.walk(path)):
+            for a in filenames:
+                filename = os.path.join(dirpath, a)
+                if ('fft' not in filename and 'README' not in filename and '.yml' not in filename and '.txt' in filename):
+                    src_flist.append(filename)
+    #         src_flist = self.data_selector(src_flist,meta,target)
+        src_TDS = self.getTDS(src_flist, src_TDS)
+        dtlist = self.getDatetime2(src_flist, dtlist)
+        return src_flist, src_TDS, dtlist    
 
 
     def getTDS(self,src_flist, des_TDS):   

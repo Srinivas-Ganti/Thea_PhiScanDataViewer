@@ -6,12 +6,15 @@ from PyQt5 import uic
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
+from PyQt5 import QtSvg
 from pyqtgraph import PlotWidget, graphicsItems, TextItem, mkPen
 from pyqtgraph.graphicsItems.PlotDataItem import PlotDataItem, PlotCurveItem
 import pyqtgraph as pg
 from matplotlib import cm
 
 
+baseDir =  os.path.dirname(os.path.abspath(__file__))
+sys.path.append(baseDir)
 
 from PhiScanDataModel import *
 
@@ -82,8 +85,6 @@ class PolDataViewerWindow(QMainWindow):
         self.visTimer.start()
         self.animationTimer.start()
         
-        
-
 
     def updateTable(self):
 
@@ -108,9 +109,7 @@ class PolDataViewerWindow(QMainWindow):
                 if key in ['Reference', 'ref', 'F1', 'F1_reference', 'F1_Reference', 'F1Ref', 'F1ref']:
                     #always select the last loaded reference as the global reference for future calculations
                     self.analyser.referenceDF = self.analyser.dfDict[key]
-                    
-                
-                
+              
                 self.lblStatus.setText("Status: Ready")
                 print("Data added")
             # Prepare plot colors
@@ -121,13 +120,11 @@ class PolDataViewerWindow(QMainWindow):
             palette = cm.get_cmap('rainbow', len(self.analyser.dfDict))
             self.plotColors = palette(np.linspace(0,1,len(self.analyser.dfDict)))*255
             self.plotColors = np.around(self.plotColors)
-            print("Colors ready")
-            print("ROW COUNT",self.tableWidget.rowCount())
+         
             # Update table
             for row in range(len(self.analyser.files)):
-                print("Coloring rows")
-                # rowCount =  self.tableWidget.rowCount()
-                # self.tableWidget.insertRow(rowCount)
+               
+                
                 self.tableWidget.setItem(row,2,QTableWidgetItem())
                 self.tableWidget.item(row,2).setBackground(QColor(int(self.plotColors[row][0]),int(self.plotColors[row][1]),int(self.plotColors[row][2])))
                 
@@ -144,8 +141,6 @@ class PolDataViewerWindow(QMainWindow):
                         else:
                             item = QTableWidgetItem("Reference".format(row,col))
                         self.tableWidget.setItem(row,col,item)
-            
-            print("PLOTTING DATA ##################")
             self.plotData()
 
         except Exception as e:
@@ -179,6 +174,13 @@ class PolDataViewerWindow(QMainWindow):
         self.lEditSpeed.setAlignment(Qt.AlignCenter) 
         self.lEditPhi.setAlignment(Qt.AlignCenter) 
 
+        
+        pixmap = QPixmap('drawing.png')
+        self.graphicLabel.setPixmap(pixmap)
+        self.graphicLabel.setScaledContents(True)
+        self.graphicLabel.show()
+
+       
      
     def rescalePlot(self, x1,x2,px,y1,y2,py):
         
@@ -236,19 +238,21 @@ class PolDataViewerWindow(QMainWindow):
         
 
     def toggleWaterLines(self):
+
+        """Waterlines overlay toggle view"""
+
         waterLinesCopy = self.waterLines
             
         for i,waterline in enumerate(waterLinesCopy):
-            
             if self.checkBoxWaterLines.isChecked():
-                print("WaterLines ON")
                 self.livePlot.addItem(waterLinesCopy[i])
             else:
-                print("WaterLines OFF")
                 self.livePlot.removeItem(waterLinesCopy[i])
 
 
     def playScan(self):
+
+        """Play/ Pause plot animation"""
 
         if self.btnPlay.isChecked():
             self.animationTimer.stop()
@@ -261,6 +265,8 @@ class PolDataViewerWindow(QMainWindow):
 
 
     def refreshPlot(self):
+
+        """Update plot"""
 
         lblSceneX = self.livePlot.getViewBox().state['targetRange'][0][0] + np.abs(self.livePlot.getViewBox().state['targetRange'][0][1] - self.livePlot.getViewBox().state['targetRange'][0][0])*0.80
         lblSceneY =  self.livePlot.getViewBox().state['targetRange'][1][0] + np.abs(self.livePlot.getViewBox().state['targetRange'][1][1] - self.livePlot.getViewBox().state['targetRange'][1][0])*0.95
@@ -285,7 +291,12 @@ class PolDataViewerWindow(QMainWindow):
                     xData = self.analyser.dfDict[key].loc[self.phi_idx][self.xKey]
                     yData = 20*np.log(np.abs(self.analyser.dfDict[key].loc[self.phi_idx][self.yKey]))
 
-                elif ckey == 'TDS' or ckey == 'TR':
+                elif ckey == 'TDS':
+                    
+                    xData = self.analyser.dfDict[key].loc[self.phi_idx][self.xKey]
+                    yData = self.analyser.dfDict[key].loc[self.phi_idx][self.yKey]
+
+                elif ckey == 'TR' and self.analyser.referenceDF:
                     
                     xData = self.analyser.dfDict[key].loc[self.phi_idx][self.xKey]
                     yData = self.analyser.dfDict[key].loc[self.phi_idx][self.yKey]
@@ -296,6 +307,8 @@ class PolDataViewerWindow(QMainWindow):
                 
 
     def plotData(self):
+
+        """Plot data, create curves"""
 
         ckey = self.comboBoxMeasurement.currentText()
         if ckey != "TDS":
@@ -327,6 +340,8 @@ class PolDataViewerWindow(QMainWindow):
             
     def addCurve(self, curve_id, pen):
         
+        """Add curve"""
+
         plot = self.livePlot.plot(name=curve_id, pen=pen)
         self.plotVisDict[curve_id] = plot
         self.currentState[curve_id] = True
@@ -334,6 +349,8 @@ class PolDataViewerWindow(QMainWindow):
 
 
     def removeCurve(self, curve_id):
+        
+        """Remove curve"""
 
         curve_id = str(curve_id)
 
@@ -349,33 +366,28 @@ class PolDataViewerWindow(QMainWindow):
 
     def setValues(self, curve_id, xData, yData):
 
+        """Set curve data"""
+
         curve = self.plotVisDict[curve_id]
         curve.setData(xData, yData)
 
 
     def checkVisibilityFlags(self):
 
+        """Check table checkboxes to show/hide plot items"""
+
         if self.currentState:
             try:
                 for row in range(self.tableWidget.rowCount()):
                     key = self.tableWidget.item(row, 0).text()
                     pen = mkPen(color = (self.plotColors[row]), width = self.plotLineWidth)
-                    
                     if (self.tableWidget.item(row, 0).checkState() == Qt.Checked) and key not in self.plotVisDict:
                             self.addCurve(key,pen)
- 
                     if self.tableWidget.item(row, 0).checkState() == Qt.Unchecked and key in self.plotVisDict:
-                        # self.currentState[key] = False
-                        # if self.currentState[key] != self.previousState[key]:
                         self.removeCurve(key)    
-                            
-                            
-                    # self.previousState[key] = self.currentState[key]
-                
             except Exception as e:
                 raise e
             
-
 
     def selectMeasurement(self):
 
@@ -401,10 +413,10 @@ class PolDataViewerWindow(QMainWindow):
             self.livePlot.setLabel('bottom', 'Time (ps)')
             self.livePlot.setTitle("""THz - TDS""", color = 'y', size = "45 pt") 
 
-        # self.plotData()
-  
         
     def validateEditSpeed(self):
+
+        """Validate speed user input"""
                         
         validationRule = QIntValidator(1,60)
         
@@ -459,8 +471,12 @@ class PolDataViewerWindow(QMainWindow):
 
 
 if __name__ =="__main__":
-    app = QApplication(sys.argv)
-    win = PolDataViewerWindow('../config/polDataViewerConfig.yml')
-    win.show()
-    app.exec()
-    
+
+    try:
+
+        app = QApplication(sys.argv)
+        win = PolDataViewerWindow('../config/polDataViewerConfig.yml')
+        win.show()
+        app.exec()
+    except Exception as e:
+        raise e

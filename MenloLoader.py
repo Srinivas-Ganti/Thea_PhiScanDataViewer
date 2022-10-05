@@ -106,8 +106,8 @@ class MenloLoader:
         for j in range(len(e_FFT)):
             phase.append(np.arctan2(e_FFT[j].imag,e_FFT[j].real))
         phase = np.array(phase)
-        start = self.find_nearest(freq,0)[0]
-        stop = self.find_nearest(freq,4)[0]
+        start = self.find_nearest(freq,0.2)[0]
+        stop = self.find_nearest(freq,2)[0]
         slc_freq = freq[start:stop]
         phase = phase[start:stop]
         slc_FFT = FFT[start:stop]                        

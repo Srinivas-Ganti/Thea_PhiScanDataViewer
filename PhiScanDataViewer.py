@@ -201,8 +201,8 @@ class PolDataViewerWindow(QMainWindow):
         self.top = 40      
         self.labelValue = None         #LabelItem to display timelapse frames on plot
         self.setGeometry(self.left, self.top, self.width, self.height)   
-        self.colorLivePulse = (66,155,184, 145)
-        self.colorlivePulseBackground = (66,155,184,145)
+        # self.colorLivePulse = (66,155,184, 145)
+        # self.colorlivePulseBackground = (66,155,184,145)
         self.livePlotLineWidth = 1
         self.averagePlotLineWidth = 1.5
         self.plotDataContainer = {}       # Dictionary for plot items
@@ -279,10 +279,16 @@ class PolDataViewerWindow(QMainWindow):
             if self.phi_idx == 359:
                 self.phi_idx = 0
             ckey = self.comboBoxMeasurement.currentText()
-            if ckey != "TDS":
+            if ckey == "FFT" :
                 self.xKey = 'freq' 
                 self.yKey = ckey
-            else:
+            if ckey == "TR" :
+                self.xKey = 'freq' 
+                self.yKey = ckey
+            if ckey == 'PD':
+                self.xKey = 'p_freq'
+                self.yKey = 'pd'
+            if ckey == 'TDS':
                 self.xKey = 'time'
                 self.yKey = 'amp'
             for key in self.plotVisDict:
@@ -291,14 +297,7 @@ class PolDataViewerWindow(QMainWindow):
 
                     xData = self.analyser.dfDict[key].loc[self.phi_idx][self.xKey]
                     yData = 20*np.log(np.abs(self.analyser.dfDict[key].loc[self.phi_idx][self.yKey]))
-
-                elif ckey == 'TDS':
-                    
-                    xData = self.analyser.dfDict[key].loc[self.phi_idx][self.xKey]
-                    yData = self.analyser.dfDict[key].loc[self.phi_idx][self.yKey]
-
-                elif ckey == 'TR' and self.analyser.referenceDF is not None:
-                    
+                else:
                     xData = self.analyser.dfDict[key].loc[self.phi_idx][self.xKey]
                     yData = self.analyser.dfDict[key].loc[self.phi_idx][self.yKey]
 
@@ -312,10 +311,13 @@ class PolDataViewerWindow(QMainWindow):
         """Plot data, create curves"""
 
         ckey = self.comboBoxMeasurement.currentText()
-        if ckey != "TDS":
+        if (ckey == "FFT") or (ckey == "TR"):
             self.xKey = 'freq' 
             self.yKey = ckey
-        else:
+        if ckey == 'PD':
+            self.xKey = 'p_freq' 
+            self.yKey = 'pd'
+        elif ckey == "TDS":
             self.xKey = 'time'
             self.yKey = 'amp'
         print("Looping through data dict")
@@ -325,8 +327,7 @@ class PolDataViewerWindow(QMainWindow):
             if ckey == 'FFT':
                 xData = self.analyser.dfDict[key].loc[self.phi_idx][self.xKey]
                 yData = 20*np.log(np.abs(self.analyser.dfDict[key].loc[self.phi_idx][self.yKey]))
-            elif ckey == 'TDS' or ckey == 'TR':
-                
+            else:
                 xData = self.analyser.dfDict[key].loc[self.phi_idx][self.xKey]
                 yData = self.analyser.dfDict[key].loc[self.phi_idx][self.yKey]
             print("Current key and plot item")
@@ -413,6 +414,12 @@ class PolDataViewerWindow(QMainWindow):
             self.livePlot.setLabel('left', 'Signal (mV)')
             self.livePlot.setLabel('bottom', 'Time (ps)')
             self.livePlot.setTitle("""THz - TDS""", color = 'y', size = "45 pt") 
+        elif self.comboBoxMeasurement.currentIndex() == 3:
+            print("PD")    
+            self.rescalePlot(0.2,2,0,-2,2,0)        
+            self.livePlot.setLabel('left', 'Phase difference (rad)')
+            self.livePlot.setLabel('bottom', 'Frequency (THz)')
+            self.livePlot.setTitle("""THz - Unwrapped Phase difference""", color = (255,20,147), size = "45 pt") 
 
         
     def validateEditSpeed(self):

@@ -29,7 +29,7 @@ class Analyser():
         """Correct low frequency phase error"""
 
         for i in range(len(df)):
-            phase_offset_index = self.ml.find_nearest(df.loc[i]['p_freq'], 0.12)[0]
+            phase_offset_index = self.ml.find_nearest(df.loc[i]['p_freq'], 0.2)[0]
             df.at[i, 'pd'] = df.loc[i]['pd'] - df.loc[i]['pd'][phase_offset_index]
         return df
 
